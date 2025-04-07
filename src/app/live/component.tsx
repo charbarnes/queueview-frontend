@@ -67,24 +67,19 @@ export default function LiveWaitTimesComponent() {
   const [events, setEvents] = useState<EventData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
-    const username = "admin";
-    const password = "admin";
-    const dbName = "terminal_images";
-    const authHeader = "Basic " + btoa(`${username}:${password}`);
-
-    fetch(`http://129.114.26.25:32000/${dbName}/_all_docs?include_docs=true`, {
-      headers: {
-        Authorization: authHeader,
-      },
-    })
+    // Use the API route provided by Next.js which is served over HTTPS.
+    const dbUrl = "/api/couchdb";
+    fetch(dbUrl)
       .then((res) => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
         return res.json();
       })
       .then((data) => {
-        const rows = data.rows as CouchDBRow[];
+        // Process the CouchDB data (assuming similar structure)
+        const rows = data.rows as CouchDBRow[]; // Ideally, define a proper interface
         const eventsData: EventData[] = rows
           .filter((row) => row.doc && row.doc.num_ppl !== undefined)
           .map((row) => ({
@@ -97,7 +92,7 @@ export default function LiveWaitTimesComponent() {
         setLoading(false);
       })
       .catch((err) => {
-        console.error("Fetch error:", err);
+        console.error("Error fetching CouchDB data:", err);
         setError(err.message);
         setLoading(false);
       });
