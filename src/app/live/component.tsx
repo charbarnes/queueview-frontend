@@ -22,6 +22,8 @@ import {
   PointElement,
   Tooltip,
   Legend,
+  ChartOptions,
+  TooltipItem,
 } from "chart.js";
 
 // Register Chart.js components
@@ -34,6 +36,7 @@ ChartJS.register(
   Legend
 );
 
+// Terminal names mapping
 const TERMINALS: Record<string, string> = {
   terminal_A: "Terminal A",
   terminal_B: "Terminal B",
@@ -41,12 +44,20 @@ const TERMINALS: Record<string, string> = {
   terminal_D: "Terminal D",
 };
 
-// Event interface
+// Define a custom interface for data points used in the chart
+interface DataPoint {
+  x: string;
+  y: number;
+  count: number;
+}
+
+// Event interface updated to include processingTimeMs
 interface EventData {
   _id: string;
   terminal_id: string;
   timestamp: string;
   count: number;
+  processingTimeMs?: number;
 }
 
 interface CouchDBRow {
@@ -59,18 +70,31 @@ interface CouchDBRow {
     num_ppl: number;
     timestamp_received: string;
     timestamp_processed: string;
-    processing_time_ms: number;
+    processing_time_ms?: number;
   };
 }
 
 export default function LiveWaitTimesComponent() {
   const [events, setEvents] = useState<EventData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Fallback multiplier if processing time is not available (in minutes per person)
+  const waitMultiplier = 2.5;
+  // Scaling factor to adjust the processingTimeMs if needed
+  const processingTimeScalingFactor = 5; // Adjust this factor to better match reality
+
   useEffect(() => {
-    // Use the API route provided by Next.js which is served over HTTPS.
-    const dbUrl = "/api/couchdb";
-    fetch(dbUrl)
+    const username = "admin";
+    const password = "admin";
+    const dbName = "terminal_images";
+    const authHeader = "Basic " + btoa(`${username}:${password}`);
+
+    fetch(`http://129.114.26.25:32000/${dbName}/_all_docs?include_docs=true`, {
+      headers: {
+        Authorization: authHeader,
+      },
+    })
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
@@ -78,8 +102,7 @@ export default function LiveWaitTimesComponent() {
         return res.json();
       })
       .then((data) => {
-        // Process the CouchDB data (assuming similar structure)
-        const rows = data.rows as CouchDBRow[]; // Ideally, define a proper interface
+        const rows = data.rows as CouchDBRow[];
         const eventsData: EventData[] = rows
           .filter((row) => row.doc && row.doc.num_ppl !== undefined)
           .map((row) => ({
@@ -87,6 +110,7 @@ export default function LiveWaitTimesComponent() {
             terminal_id: row.doc.terminal_id,
             timestamp: row.doc.timestamp_received,
             count: row.doc.num_ppl,
+            processingTimeMs: row.doc.processing_time_ms, // Include processing time if available
           }));
         setEvents(eventsData);
         setLoading(false);
@@ -132,17 +156,35 @@ export default function LiveWaitTimesComponent() {
       ) : (
         <Box sx={{ width: "100%", maxWidth: 800 }}>
           {Object.entries(grouped).map(([terminal, terminalEvents]) => {
-            const chartData = {
-              labels: terminalEvents.map((e) =>
-                new Date(e.timestamp).toLocaleTimeString([], {
+            // Build data points with x (time label) and y (estimated wait time); include count for tooltips.
+            const dataPoints: DataPoint[] = terminalEvents.map((e) => {
+              // Use processing time if available and scale it,
+              // otherwise fall back to a constant multiplier per person.
+              const estimatedTime = e.processingTimeMs
+                ? parseFloat(
+                    (
+                      (e.count *
+                        e.processingTimeMs *
+                        processingTimeScalingFactor) /
+                      60000
+                    ).toFixed(1)
+                  )
+                : parseFloat((e.count * waitMultiplier).toFixed(1));
+              return {
+                x: new Date(e.timestamp).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
-                })
-              ),
+                }),
+                y: estimatedTime,
+                count: e.count,
+              };
+            });
+
+            const chartData = {
               datasets: [
                 {
-                  label: "Number of People",
-                  data: terminalEvents.map((e) => e.count),
+                  label: "Estimated Wait Time (min)",
+                  data: dataPoints,
                   fill: false,
                   borderColor: "rgba(63, 81, 181, 1)",
                   backgroundColor: "rgba(63, 81, 181, 0.5)",
@@ -151,15 +193,34 @@ export default function LiveWaitTimesComponent() {
               ],
             };
 
+            const chartOptions: ChartOptions<"line"> = {
+              responsive: true,
+              scales: {
+                x: {
+                  type: "category" as const,
+                },
+              },
+              plugins: {
+                tooltip: {
+                  callbacks: {
+                    label: function (context: TooltipItem<"line">): string {
+                      const dataPoint = context.raw as DataPoint;
+                      return `Wait Time: ${dataPoint.y} min (People in line: ${dataPoint.count})`;
+                    },
+                  },
+                },
+              },
+            };
+
             return (
               <Accordion key={terminal}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography sx={{ fontWeight: "bold" }}>
-                    {TERMINALS[terminal]}
+                    {TERMINALS[terminal] || terminal}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Line data={chartData} options={{ responsive: true }} />
+                  <Line data={chartData} options={chartOptions} />
                 </AccordionDetails>
               </Accordion>
             );
@@ -168,7 +229,7 @@ export default function LiveWaitTimesComponent() {
       )}
 
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2} mt={6}>
-        <Button variant="contained" href="/" color="primary">
+        <Button variant="contained" color="primary" href="/">
           Back to Home
         </Button>
       </Stack>
