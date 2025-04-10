@@ -66,10 +66,8 @@ interface CouchDBRow {
     _id: string;
     _rev: string;
     terminal_id: string;
-    pic_id: string;
-    num_ppl: number;
-    timestamp_received: string;
-    timestamp_processed: string;
+    head_count: number;
+    timestamp: string;
     processing_time_ms?: number;
   };
 }
@@ -84,7 +82,7 @@ export default function LiveWaitTimesComponent() {
   // Scaling factor to adjust the processingTimeMs if needed
   const processingTimeScalingFactor = 5; // Adjust this factor to better match reality
 
-  useEffect(() => {
+  const fetchData = () => {
     const dbUrl = "/api/couchdb";
     fetch(dbUrl)
       .then((res) => {
@@ -96,13 +94,13 @@ export default function LiveWaitTimesComponent() {
       .then((data) => {
         const rows = data.rows as CouchDBRow[];
         const eventsData: EventData[] = rows
-          .filter((row) => row.doc && row.doc.num_ppl !== undefined)
+          .filter((row) => row.doc && row.doc.head_count !== undefined)
           .map((row) => ({
             _id: row.id,
             terminal_id: row.doc.terminal_id,
-            timestamp: row.doc.timestamp_received,
-            count: row.doc.num_ppl,
-            processingTimeMs: row.doc.processing_time_ms, // Include processing time if available
+            timestamp: row.doc.timestamp,
+            count: row.doc.head_count,
+            processingTimeMs: row.doc.processing_time_ms,
           }));
         setEvents(eventsData);
         setLoading(false);
@@ -112,6 +110,12 @@ export default function LiveWaitTimesComponent() {
         setError(err.message);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // Group events by terminal
@@ -124,6 +128,7 @@ export default function LiveWaitTimesComponent() {
     {}
   );
 
+  const cutoffTime = new Date(Date.now() - 5 * 3600 * 1000);
   return (
     <Container
       maxWidth="lg"
@@ -148,10 +153,13 @@ export default function LiveWaitTimesComponent() {
       ) : (
         <Box sx={{ width: "100%", maxWidth: 800 }}>
           {Object.entries(grouped).map(([terminal, terminalEvents]) => {
-            // Build data points with x (time label) and y (estimated wait time); include count for tooltips.
-            const dataPoints: DataPoint[] = terminalEvents.map((e) => {
-              // Use processing time if available and scale it,
-              // otherwise fall back to a constant multiplier per person.
+            // Filter events to only include ones newer than cutoffTime
+            const filteredEvents = terminalEvents.filter(
+              (e) => new Date(e.timestamp) >= cutoffTime
+            );
+
+            // Build the data points using the filtered events
+            const dataPoints = filteredEvents.map((e) => {
               const estimatedTime = e.processingTimeMs
                 ? parseFloat(
                     (
