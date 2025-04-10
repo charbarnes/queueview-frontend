@@ -1,18 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Grid from "@mui/material/GridLegacy";
 import {
   Container,
   Typography,
   Button,
-  Stack,
   Box,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   CircularProgress,
 } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -42,6 +38,26 @@ const TERMINALS: Record<string, string> = {
   terminal_B: "Terminal B",
   terminal_C: "Terminal C",
   terminal_D: "Terminal D",
+};
+
+// Color mapping for each terminal's graph
+const COLORS: Record<string, { border: string; background: string }> = {
+  terminal_A: {
+    border: "rgba(0, 109, 218, 1)",
+    background: "rgba(0, 109, 218, 0.5)",
+  },
+  terminal_B: {
+    border: "rgba(0, 130, 161, 1)",
+    background: "rgba(0, 130, 161, 0.5)",
+  },
+  terminal_C: {
+    border: "rgba(153, 201, 245, 1)",
+    background: "rgba(153, 201, 245, 0.5)",
+  },
+  terminal_D: {
+    border: "rgba(63, 81, 181, 1)",
+    background: "rgba(63, 81, 181, 0.5)",
+  },
 };
 
 // Define a custom interface for data points used in the chart
@@ -129,110 +145,149 @@ export default function LiveWaitTimesComponent() {
   );
 
   const cutoffTime = new Date(Date.now() - 5 * 3600 * 1000);
+
   return (
     <Container
       maxWidth="lg"
       sx={{
         minHeight: "100vh",
-        py: 8,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
+        py: 4,
       }}
     >
-      <Typography variant="h3" gutterBottom>
-        Live Wait Times
-      </Typography>
+      {/* Header with Back button on the left and centered title */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 1,
+        }}
+      >
+        <Button variant="contained" color="primary" href="/">
+          Back to Home
+        </Button>
+        <Typography
+          variant="h3"
+          gutterBottom
+          sx={{ flexGrow: 1, textAlign: "center" }}
+        >
+          Live Wait Times
+        </Typography>
+        {/* Empty Box to balance the layout */}
+        <Box sx={{ width: 120 }} />
+      </Box>
 
       {loading ? (
         <CircularProgress />
       ) : error ? (
         <Typography color="error">{error}</Typography>
       ) : (
-        <Box sx={{ width: "100%", maxWidth: 800 }}>
-          {Object.entries(grouped).map(([terminal, terminalEvents]) => {
-            // Filter events to only include ones newer than cutoffTime
-            const filteredEvents = terminalEvents.filter(
-              (e) => new Date(e.timestamp) >= cutoffTime
-            );
+        <Box sx={{ width: "100%", maxWidth: 1500 }}>
+          <Grid container spacing={2}>
+            {Object.entries(grouped).map(([terminal, terminalEvents]) => {
+              // Filter events to only include ones newer than cutoffTime
+              const filteredEvents = terminalEvents.filter(
+                (e) => new Date(e.timestamp) >= cutoffTime
+              );
 
-            // Build the data points using the filtered events
-            const dataPoints = filteredEvents.map((e) => {
-              const estimatedTime = e.processingTimeMs
-                ? parseFloat(
-                    (
-                      (e.count *
-                        e.processingTimeMs *
-                        processingTimeScalingFactor) /
-                      60000
-                    ).toFixed(1)
-                  )
-                : parseFloat((e.count * waitMultiplier).toFixed(1));
-              return {
-                x: new Date(e.timestamp).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-                y: estimatedTime,
-                count: e.count,
+              // Build the data points using the filtered events
+              const dataPoints = filteredEvents.map((e) => {
+                const estimatedTime = e.processingTimeMs
+                  ? parseFloat(
+                      (
+                        (e.count *
+                          e.processingTimeMs *
+                          processingTimeScalingFactor) /
+                        60000
+                      ).toFixed(1)
+                    )
+                  : parseFloat((e.count * waitMultiplier).toFixed(1));
+                return {
+                  x: new Date(e.timestamp).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                  y: estimatedTime,
+                  count: e.count,
+                };
+              });
+
+              // Determine the current wait time from the latest data point, if available
+              const currentWaitTime =
+                dataPoints.length > 0
+                  ? dataPoints[dataPoints.length - 1].y
+                  : "N/A";
+
+              const colors = COLORS[terminal] || {
+                border: "rgba(63, 81, 181, 1)",
+                background: "rgba(63, 81, 181, 0.5)",
               };
-            });
 
-            const chartData = {
-              datasets: [
-                {
-                  label: "Estimated Wait Time (min)",
-                  data: dataPoints,
-                  fill: false,
-                  borderColor: "rgba(63, 81, 181, 1)",
-                  backgroundColor: "rgba(63, 81, 181, 0.5)",
-                  tension: 0.3,
-                },
-              ],
-            };
+              const chartData = {
+                datasets: [
+                  {
+                    label: "Estimated Wait Time (min)",
+                    data: dataPoints,
+                    fill: false,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                    tension: 0.3,
+                  },
+                ],
+              };
 
-            const chartOptions: ChartOptions<"line"> = {
-              responsive: true,
-              scales: {
-                x: {
-                  type: "category" as const,
+              const chartOptions: ChartOptions<"line"> = {
+                responsive: true,
+                scales: {
+                  x: {
+                    type: "category" as const,
+                  },
                 },
-              },
-              plugins: {
-                tooltip: {
-                  callbacks: {
-                    label: function (context: TooltipItem<"line">): string {
-                      const dataPoint = context.raw as DataPoint;
-                      return `Wait Time: ${dataPoint.y} min (People in line: ${dataPoint.count})`;
+                plugins: {
+                  tooltip: {
+                    callbacks: {
+                      label: function (context: TooltipItem<"line">): string {
+                        const dataPoint = context.raw as DataPoint;
+                        return `Wait Time: ${dataPoint.y} min (People in line: ${dataPoint.count})`;
+                      },
                     },
                   },
                 },
-              },
-            };
+              };
 
-            return (
-              <Accordion key={terminal}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography sx={{ fontWeight: "bold" }}>
-                    {TERMINALS[terminal] || terminal}
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Line data={chartData} options={chartOptions} />
-                </AccordionDetails>
-              </Accordion>
-            );
-          })}
+              return (
+                <Grid item xs={12} sm={6} key={terminal}>
+                  <Box
+                    sx={{
+                      border: "1px solid #ccc",
+                      borderRadius: 1,
+                      p: 2,
+                      height: "100%",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        mb: 2,
+                      }}
+                    >
+                      <Typography variant="h6" sx={{ fontWeight: "bold" }}>
+                        {TERMINALS[terminal] || terminal}
+                      </Typography>
+                      <Typography variant="subtitle1" color="textSecondary">
+                        Estimated wait time: {currentWaitTime} min
+                      </Typography>
+                    </Box>
+                    <Line data={chartData} options={chartOptions} />
+                  </Box>
+                </Grid>
+              );
+            })}
+          </Grid>
         </Box>
       )}
-
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} mt={6}>
-        <Button variant="contained" color="primary" href="/">
-          Back to Home
-        </Button>
-      </Stack>
     </Container>
   );
 }
