@@ -94,9 +94,9 @@ export default function LiveWaitTimesComponent() {
   const [error, setError] = useState<string | null>(null);
 
   // Fallback multiplier if processing time is not available (in minutes per person)
-  const waitMultiplier = 2.5;
+  const waitMultiplier = 1.7;
   // Scaling factor to adjust the processingTimeMs if needed
-  const processingTimeScalingFactor = 5; // Adjust this factor to better match reality
+  const processingTimeScalingFactor = 2; 
 
   const fetchData = () => {
     const dbUrl = "/api/couchdb";
