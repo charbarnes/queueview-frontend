@@ -144,7 +144,7 @@ export default function LiveWaitTimesComponent() {
     {}
   );
 
-  const cutoffTime = new Date(Date.now() - 5 * 3600 * 1000);
+  const cutoffTime = new Date(Date.now() - 1 * 3600 * 1000);
 
   return (
     <Container
@@ -178,7 +178,16 @@ export default function LiveWaitTimesComponent() {
       </Box>
 
       {loading ? (
-        <CircularProgress />
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "40vh",
+          }}
+        >
+          <CircularProgress />
+        </Box>
       ) : error ? (
         <Typography color="error">{error}</Typography>
       ) : (
