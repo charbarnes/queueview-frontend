@@ -22,7 +22,6 @@ import {
   TooltipItem,
 } from "chart.js";
 
-// Register Chart.js components
 ChartJS.register(
   LineElement,
   CategoryScale,
@@ -32,7 +31,7 @@ ChartJS.register(
   Legend
 );
 
-// Terminal names mapping
+// map the terminal name variables to formatted strings
 const TERMINALS: Record<string, string> = {
   terminal_A: "Terminal A",
   terminal_B: "Terminal B",
@@ -40,7 +39,7 @@ const TERMINALS: Record<string, string> = {
   terminal_D: "Terminal D",
 };
 
-// Color mapping for each terminal's graph
+// color mappings for each terminal's graph colors
 const COLORS: Record<string, { border: string; background: string }> = {
   terminal_A: {
     border: "rgba(0, 109, 218, 1)",
@@ -60,14 +59,20 @@ const COLORS: Record<string, { border: string; background: string }> = {
   },
 };
 
-// Define a custom interface for data points used in the chart
+// mapping from each terminal to each of the video files
+const VIDEOS: Record<string, string> = {
+  terminal_A: "/videos/video_a.mp4",
+  terminal_B: "/videos/video_b.mp4",
+  terminal_C: "/videos/video_c.mp4",
+  terminal_D: "/videos/video_d.mp4",
+};
+
 interface DataPoint {
   x: string;
   y: number;
   count: number;
 }
 
-// Event interface updated to include processingTimeMs
 interface EventData {
   _id: string;
   terminal_id: string;
@@ -96,7 +101,7 @@ export default function LiveWaitTimesComponent() {
   // Fallback multiplier if processing time is not available (in minutes per person)
   const waitMultiplier = 1.7;
   // Scaling factor to adjust the processingTimeMs if needed
-  const processingTimeScalingFactor = 2; 
+  const processingTimeScalingFactor = 2;
 
   const fetchData = () => {
     const dbUrl = "/api/couchdb";
@@ -144,7 +149,8 @@ export default function LiveWaitTimesComponent() {
     {}
   );
 
-  const cutoffTime = new Date(Date.now() - 1 * 3600 * 1000);
+  // Only include events from the last 30 minutes
+  const cutoffTime = new Date(Date.now() - 0.5 * 3600 * 1000);
 
   return (
     <Container
@@ -194,12 +200,11 @@ export default function LiveWaitTimesComponent() {
         <Box sx={{ width: "100%", maxWidth: 1500 }}>
           <Grid container spacing={2}>
             {Object.entries(grouped).map(([terminal, terminalEvents]) => {
-              // Filter events to only include ones newer than cutoffTime
+              // Filter events to include only those newer than cutoffTime
               const filteredEvents = terminalEvents.filter(
                 (e) => new Date(e.timestamp) >= cutoffTime
               );
 
-              // Build the data points using the filtered events
               const dataPoints = filteredEvents.map((e) => {
                 const estimatedTime = e.processingTimeMs
                   ? parseFloat(
@@ -221,7 +226,7 @@ export default function LiveWaitTimesComponent() {
                 };
               });
 
-              // Determine the current wait time from the latest data point, if available
+              // Get the most recent wait time
               const currentWaitTime =
                 dataPoints.length > 0
                   ? dataPoints[dataPoints.length - 1].y
@@ -289,7 +294,26 @@ export default function LiveWaitTimesComponent() {
                         Estimated wait time: {currentWaitTime} min
                       </Typography>
                     </Box>
-                    <Line data={chartData} options={chartOptions} />
+                    {/* Flex container for video and chart */}
+                    <Box sx={{ display: "flex", alignItems: "flex-start" }}>
+                      <Box sx={{ flex: "0 0 40%", pr: 1 }}>
+                        <video
+                          src={VIDEOS[terminal]}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          style={{
+                            width: "100%",
+                            borderRadius: "4px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      </Box>
+                      <Box sx={{ flex: "0 0 60%", pl: 1 }}>
+                        <Line data={chartData} options={chartOptions} />
+                      </Box>
+                    </Box>
                   </Box>
                 </Grid>
               );
